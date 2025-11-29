@@ -8,7 +8,7 @@ return {
 	RELOAD = false, -- Reloading mechanic, if off then bullets can fire infinitely.
 	BULLETS = 30, --Bullets gun can hold before needing to reload.
 	MAX_BULLETS = math.huge, --Max bullets a gun could have. math.huge is infinite Bullets.
-	RELOAD_TIME = 1, --Time in seconds it takes to reload gun.
+	RELOAD_TIME = 3, --Time in seconds it takes to reload gun.
 	
 	BODY_DAMAGE = { --This format should work for R15, R6 and other rigs.
 		[Enum.Limb.Unknown] = 3, --Your base damage.
