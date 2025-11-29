@@ -34,10 +34,10 @@ end
 
 local function debounce(isreloading)
 	if isreloading then
-		return true
+		return false
 	end
 	
-	return false
+	return true
 end
 
 --Each Character can only have one gun equipped. Once equipped they can shoot it and reload it.
@@ -66,11 +66,23 @@ local function SetupTool(tool:Tool)
 	private.Owner = tool.Parent
 	
 	private.Reloading = false
-	private.Ammo = 30
-	private.MaxAmmo = 30
+	private.Ammo = Data.BULLETS
+	private.MaxAmmo = DATA.MAX_BULLETS
 	private.RayFilter = RaycastParams.new()
 	private.RayFilter.FilterType = Enum.RaycastFilterType.Exclude
 	
+	--For now this does nothing.
+	private.Keys = {
+		["Shoot"] = {
+			isPressed = false,
+			lastPressed = nil,
+		},
+		["Reload"] = {
+			isPressed = false,
+			lastPressed = nil,
+		}
+	}
+
 	--Public
 	local Config = tool:FindFirstChildOfClass("Configuration")
 	if not Config then
@@ -83,6 +95,7 @@ local function SetupTool(tool:Tool)
 	
 	tool:SetAttribute("Equipped", false)
 	tool:SetAttribute("Shooting", false)
+	tool:SetAttribute("Reloading", false)
 	tool:SetAttribute("sad", "asd")
 	
 	--Events
@@ -115,7 +128,6 @@ local function SetupTool(tool:Tool)
 			v:Disconnect()
 		end
 	end)
-	
 	
 	table.insert(ActiveGuns, tool)
 	
@@ -226,6 +238,45 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 	Tool:SetAttribute("Shooting", keydown)
 end)
 
+SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
+	local char = plr.Character
+
+	if not char or not char.Parent then
+		return
+	end
+
+	local Tool = CharEquippedGun[Char]
+	if not Tool then
+		return
+	end
+	
+	local private = PrivateGunsData[Tool]
+	local Base = ConfigCache[private.DataName]
+
+	if not Base.RELOAD then
+		return
+	end
+
+	--Start reloading.
+	private.Reloading = true
+	Tool:SetAttribute("Reloading", true)
+
+	local ReloadSuccess = true
+
+	local UnequipCheck = Tool.Unequipped:Once(function()
+		ReloadSuccess = false
+	end)
+
+	task.delay(Base.RELOAD_TIME, function()
+		private.Reloading = false
+		Tool:SetAttribute("Reloading", false)
+
+		if ReloadSuccess then
+			private.Ammo = private.MaxAmmo
+		end
+	end)
+end)
+
 local fpscounter = 0
 local t = tick()
 
@@ -241,15 +292,22 @@ RunService.Heartbeat:Connect(function(dt)
 		
 		local private = PrivateGunsData[tool]
 		local Base = ConfigCache[private.DataName]
-		
-		if not private.Shooting then
+
+		--Check if the gun is in the state of being reloaded.
+		if private.Reloading then
 			continue
 		end
+
+		--Check if the player is shooting the gun.
+		if not private.Shooting then
+			continue --Not being shot.
+		end
 		
+		--Shoot gun!
 		local TimeSinceShot = tick() - private.LastFired
 		local ShotsToFire = math.floor(TimeSinceShot / (1 / Base.FIRERATE))
 		
-		if ShotsToFire <= 0 then continue end --No shots lol
+		if ShotsToFire <= 0 then continue end --No shots, skip frame.
 		--print("Shooting ".. ShotsToFire)
 		
 		if Base.FIRETYPE == "Semi" then
@@ -288,8 +346,6 @@ RunService.Heartbeat:Connect(function(dt)
 			s.PlayOnRemove = true
 			s:Play()
 		--	----
-
-
 
 		--	--Debug Part (causes lag if on)
 		--	local Part = Instance.new("Part")
