@@ -40,6 +40,19 @@ local function debounce(isreloading)
 	return true
 end
 
+local function LoadAnimation(Humanoid, assetId:string)
+	local Animator = Humanoid:FindFirstChildOfClass("Animator")
+	if not Animator then
+		Animator = Instance.new("Animator")
+		Animator.Parent = Humanoid
+	end
+
+	local Animation = Instance.new("Animation")
+	Animation.AnimationId = assetId
+	local Track = Animator:LoadAnimation(Animation)
+	return Track
+end
+
 --Each Character can only have one gun equipped. Once equipped they can shoot it and reload it.
 --The reason its an array of characters and not players is to allow npcs to use guns.
 local CharEquippedGun = {}
@@ -70,6 +83,8 @@ local function SetupTool(tool:Tool)
 	private.MaxAmmo = Data.MAX_BULLETS
 	private.RayFilter = RaycastParams.new()
 	private.RayFilter.FilterType = Enum.RaycastFilterType.Exclude
+	
+	private.AnimationTracks = {}
 	
 	--For now this does nothing.
 	private.Keys = {
@@ -105,11 +120,22 @@ local function SetupTool(tool:Tool)
 		Config.Owner.Value = tool.Parent
 		
 		tool:SetAttribute("Equipped", true)
+		
+		--Play equip animation
+		local Track = LoadAnimation(tool.Parent:FindFirstChildOfClass("Humanoid"), Data.ANIMATIONS.Idle)
+		Track.Looped = true
+		table.insert(private.AnimationTracks, Track)
+		Track:Play()
 	end)
 	Connections[2] = tool.Unequipped:Connect(function()
 		CharEquippedGun[Config.Owner.Value] = false
 		
 		tool:SetAttribute("Equipped", false)
+		
+		--Stop all anims
+		for i,track in ipairs(private.AnimationTracks) do
+			track:Stop()
+		end
 	end)
 	Connections[3] = tool.AncestryChanged:Connect(function(child, parent)
 		local newowner = parent
@@ -223,6 +249,7 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 	end
 	
 	local private = PrivateGunsData[Tool]
+	local Base = ConfigCache[private.DataName]
 	
 	if keydown then
 		local base = ConfigCache[private.DataName]
@@ -236,16 +263,27 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 	
 	private.Shooting = keydown
 	Tool:SetAttribute("Shooting", keydown)
+	if keydown then
+		local track = LoadAnimation(Char.Humanoid, Base.ANIMATIONS.Shoot)
+		track.Looped = false
+		private.AnimationTracks["Shoot"] = track
+	elseif private.AnimationTracks["Shoot"] ~= nil then
+		local track:AnimationTrack = private.AnimationTracks["Shoot"]
+		track.Looped = false
+		track.Ended:Once(function()
+			track:Stop()
+		end)
+	end
 end)
 
 SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local char = plr.Character
-
+	
 	if not char or not char.Parent then
 		return
 	end
 
-	local Tool = CharEquippedGun[Char]
+	local Tool = CharEquippedGun[char]
 	if not Tool then
 		return
 	end
@@ -253,14 +291,24 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local private = PrivateGunsData[Tool]
 	local Base = ConfigCache[private.DataName]
 
-	if not Base.RELOAD then
+	if not Base.RELOAD or private.Reloading then
 		return
 	end
+	
+	print("Reload ", keydown)
 
 	--Start reloading.
 	private.Reloading = true
 	Tool:SetAttribute("Reloading", true)
-
+	
+	--Play reload animation
+	local track = LoadAnimation(char.Humanoid, Base.ANIMATIONS.Reload)
+	track.Looped = false
+	private.AnimationTracks["Reload"] = track
+	track:Play(0, 3,  track.Length / Base.RELOAD_TIME)
+	
+	--Stop shooting
+	private.Shooting= false
 	local ReloadSuccess = true
 
 	local UnequipCheck = Tool.Unequipped:Once(function()
@@ -314,6 +362,14 @@ RunService.Heartbeat:Connect(function(dt)
 			ShotsToFire = 1
 		end
 		
+		private.AnimationTracks.Shoot:Play()
+		
+		local s:Sound = tool.Handle:FindFirstChildOfClass("Sound"):Clone()
+		s.Parent = tool.Handle
+		s.PlayOnRemove = true
+		s:Play()
+		
+		--In frame processing
 		for i = 1, ShotsToFire do
 			fpscounter += 1 --Debug variable
 			
@@ -341,10 +397,7 @@ RunService.Heartbeat:Connect(function(dt)
 			end
 			
 			SharedFolder.Remotes.UnreliableVFX:FireAllClients("Beam", tool.Handle:FindFirstChildOfClass("Attachment"), hitpos, 1/30)
-			local s:Sound = tool.Handle:FindFirstChildOfClass("Sound"):Clone()
-			s.Parent = tool.Handle
-			s.PlayOnRemove = true
-			s:Play()
+			
 		--	----
 
 		--	--Debug Part (causes lag if on)

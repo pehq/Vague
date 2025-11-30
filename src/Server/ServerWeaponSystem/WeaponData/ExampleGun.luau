@@ -1,14 +1,14 @@
 --Note: Not all options are finished.
 return {
-	FIRERATE = 15, --Shots per second
+	FIRERATE = 20, --Shots per second
 	RANGE = 1000, --In Studs, 1000 should be good... Shouldn't be set to infinity.
 	FIRE_COOLDOWN = 0.2, --time after stopped firing until you can fire gun.
 	FIRETYPE = "Auto", --"Auto", "Semi". (I don't wanna add burst because it's cancerous.)
 	
-	RELOAD = false, -- Reloading mechanic, if off then bullets can fire infinitely.
+	RELOAD = true, -- Reloading mechanic, if off then bullets can fire infinitely.
 	BULLETS = 30, --Bullets gun can hold before needing to reload.
 	MAX_BULLETS = math.huge, --Max bullets a gun could have. math.huge is infinite Bullets.
-	RELOAD_TIME = 3, --Time in seconds it takes to reload gun.
+	RELOAD_TIME = 1.78, --Time in seconds it takes to reload gun.
 	
 	BODY_DAMAGE = { --This format should work for R15, R6 and other rigs.
 		[Enum.Limb.Unknown] = 3, --Your base damage.
@@ -39,5 +39,11 @@ return {
 		SPLATTER = false, --If the shot hits a part, it will be painted with a random brickcolor.
 		RANDOM_DAMAGE = false, --A gun can do 1-100 extra damage. This is a form of russian roulette.
 		LIFESTEAL = false --The owner gets health based on how much damage he does.
+	},
+	
+	ANIMATIONS = {
+		Idle = "rbxassetid://139910156929242",
+		Reload = "rbxassetid://111849297455299",
+		Shoot = "rbxassetid://102081206061059"
 	}
 }
