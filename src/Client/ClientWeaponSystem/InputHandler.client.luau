@@ -15,5 +15,9 @@ InputContext.Shoot.Released:Connect(function()
 end)
 
 InputContext.Reload.Pressed:Connect(function()
-	Remotes.Reload:FireServer()
+	Remotes.Reload:FireServer(true)
+end)
+
+InputContext.Reload.Released:Connect(function()
+	Remotes.Reload:FireServer(false)
 end)
