@@ -67,7 +67,7 @@ local function SetupTool(tool:Tool)
 	
 	private.Reloading = false
 	private.Ammo = Data.BULLETS
-	private.MaxAmmo = DATA.MAX_BULLETS
+	private.MaxAmmo = Data.MAX_BULLETS
 	private.RayFilter = RaycastParams.new()
 	private.RayFilter.FilterType = Enum.RaycastFilterType.Exclude
 	
