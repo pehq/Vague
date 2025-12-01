@@ -81,10 +81,12 @@ local function SetupTool(tool:Tool)
 	private.Reloading = false
 	private.Ammo = Data.BULLETS
 	private.MaxAmmo = Data.MAX_BULLETS
+	private.BurstAmmo = Data.FIRETYPE == "Burst" and Data.BURST_SHOTS or nil
 	private.RayFilter = RaycastParams.new()
 	private.RayFilter.FilterType = Enum.RaycastFilterType.Exclude
 	
 	private.AnimationTracks = {}
+	
 	
 	--For now this does nothing.
 	private.Keys = {
@@ -112,6 +114,8 @@ local function SetupTool(tool:Tool)
 	tool:SetAttribute("Shooting", false)
 	tool:SetAttribute("Reloading", false)
 	tool:SetAttribute("sad", "asd")
+	tool:SetAttribute("Ammo", Data.BULLETS)
+	tool:SetAttribute("MaxAmmo", Data.MAX_BULLETS)
 	
 	--Events
 	local Connections = {}
@@ -251,6 +255,10 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local private = PrivateGunsData[Tool]
 	local Base = ConfigCache[private.DataName]
 	
+	if private.Reloading then
+		return
+	end
+	
 	if keydown then
 		local base = ConfigCache[private.DataName]
 		if tick() - private.LastTriggered < base.FIRE_COOLDOWN then
@@ -259,7 +267,6 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 		private.LastTriggered = tick()
 		private.LastFired = tick() - (1 / base.FIRERATE)
 	end
-	
 	
 	private.Shooting = keydown
 	Tool:SetAttribute("Shooting", keydown)
@@ -292,6 +299,10 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local Base = ConfigCache[private.DataName]
 
 	if not Base.RELOAD or private.Reloading then
+		return
+	end
+	
+	if Base.MAX_BULLETS == math.huge or private.Ammo == Base.MAX_BULLETS then
 		return
 	end
 	
@@ -352,16 +363,32 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 		
 		--Shoot gun!
+		--The cost is a bullet.
+		private.Ammo -= 1
+		tool:SetAttribute("Ammo", private.Ammo)
+		
 		local TimeSinceShot = tick() - private.LastFired
 		local ShotsToFire = math.floor(TimeSinceShot / (1 / Base.FIRERATE))
 		
-		if ShotsToFire <= 0 then continue end --No shots, skip frame.
-		--print("Shooting ".. ShotsToFire)
-		
 		if Base.FIRETYPE == "Semi" then
 			ShotsToFire = 1
+		elseif Base.FIRETYPE == "Burst" then
+			if private.BurstAmmo == 0 then
+				private.BurstAmmo = Base.BURST_SHOTS
+				private.Shooting = false
+				print("no shoot")
+				continue
+			end
+			
+			private.BurstAmmo -= ShotsToFire
+		end	
+		
+		if private.Ammo < ShotsToFire then
+			ShotsToFire = private.Ammo
 		end
 		
+		if ShotsToFire <= 0 then continue end --No shots, skip frame.
+		--print("Shooting ".. ShotsToFire)
 		private.AnimationTracks.Shoot:Play()
 		
 		local s:Sound = tool.Handle:FindFirstChildOfClass("Sound"):Clone()
@@ -372,7 +399,6 @@ RunService.Heartbeat:Connect(function(dt)
 		--In frame processing
 		for i = 1, ShotsToFire do
 			fpscounter += 1 --Debug variable
-			
 		--	----
 			
 			local alpha = i / ShotsToFire
@@ -397,34 +423,16 @@ RunService.Heartbeat:Connect(function(dt)
 			end
 			
 			SharedFolder.Remotes.UnreliableVFX:FireAllClients("Beam", tool.Handle:FindFirstChildOfClass("Attachment"), hitpos, 1/30)
-			
-		--	----
-
-		--	--Debug Part (causes lag if on)
-		--	local Part = Instance.new("Part")
-		--	Part.Anchored = true
-		--	Part.CanCollide = false
-		--	Part.CanQuery = false
-		--	Part.CanTouch = false
-		--	Part.Transparency = (i == ShotsToFire) and 0 or 0.7
-		--	Part.Size = (i == ShotsToFire) and Vector3.one *1.1 or Vector3.one
-		--	Part.Material = (i == ShotsToFire) and Enum.Material.Neon or Enum.Material.SmoothPlastic
-		--	Part.Color = (i == ShotsToFire) and Color3.new(1,0,0) or Color3.new(0,1,0)
-		--	Part.Position = HitPos
-		--	Part.Parent = workspace
-		--	Debris:AddItem(Part, 10)
-
-		--	--Play sound (reuse instead of clone) (TOO LOUD)
-		--	local sound = Tool.Handle["Rubber band sling shot.wav"]:Clone()
-		--	sound.PlayOnRemove = true
-		--	sound.Parent = Tool.Handle
-		--	sound:Play()
 		end
 		
 		private.LastFired += ShotsToFire * (1 / Base.FIRERATE)
 		private.LastMousePos = private.MousePos
 		
 		if Base.FIRETYPE == "Semi" then
+			private.Shooting = false
+		end
+		
+		if private.Ammo <= 0 then
 			private.Shooting = false
 		end
 	end
