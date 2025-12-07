@@ -136,9 +136,14 @@ local function SetupTool(tool:Tool)
 		
 		tool:SetAttribute("Equipped", false)
 		
+		--Stop shooting
+		private.Shooting = false
+		
 		--Stop all anims
-		for i,track in ipairs(private.AnimationTracks) do
+		print(private.AnimationTracks)
+		for i,track in pairs(private.AnimationTracks) do
 			track:Stop()
+			track:Destroy()
 		end
 	end)
 	Connections[3] = tool.AncestryChanged:Connect(function(child, parent)
@@ -302,7 +307,7 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 		return
 	end
 	
-	if Base.MAX_BULLETS == math.huge or private.Ammo == Base.MAX_BULLETS then
+	if private.Ammo == Base.MAX_BULLETS then
 		return
 	end
 	
@@ -316,7 +321,7 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local track = LoadAnimation(char.Humanoid, Base.ANIMATIONS.Reload)
 	track.Looped = false
 	private.AnimationTracks["Reload"] = track
-	track:Play(0, 3,  track.Length / Base.RELOAD_TIME)
+	track:Play(0, 2,  track.Length / Base.RELOAD_TIME)
 	
 	--Stop shooting
 	private.Shooting= false
@@ -362,10 +367,13 @@ RunService.Heartbeat:Connect(function(dt)
 			continue --Not being shot.
 		end
 		
+		--Check if there are bullets in the gun
+		if private.Ammo <= 0 then
+			--Reload
+			continue
+		end	
+		
 		--Shoot gun!
-		--The cost is a bullet.
-		private.Ammo -= 1
-		tool:SetAttribute("Ammo", private.Ammo)
 		
 		local TimeSinceShot = tick() - private.LastFired
 		local ShotsToFire = math.floor(TimeSinceShot / (1 / Base.FIRERATE))
@@ -373,7 +381,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if Base.FIRETYPE == "Semi" then
 			ShotsToFire = 1
 		elseif Base.FIRETYPE == "Burst" then
-			if private.BurstAmmo == 0 then
+			if private.BurstAmmo <= 0 then
 				private.BurstAmmo = Base.BURST_SHOTS
 				private.Shooting = false
 				print("no shoot")
@@ -383,18 +391,29 @@ RunService.Heartbeat:Connect(function(dt)
 			private.BurstAmmo -= ShotsToFire
 		end	
 		
+		if ShotsToFire <= 0 then continue end --No shots, skip frame.
+		
 		if private.Ammo < ShotsToFire then
 			ShotsToFire = private.Ammo
+			private.Ammo = 0
+			tool:SetAttribute("Ammo", 0)
+		else
+			--Count ammo
+			private.Ammo = private.Ammo - ShotsToFire
+			tool:SetAttribute("Ammo", private.Ammo)
 		end
 		
-		if ShotsToFire <= 0 then continue end --No shots, skip frame.
 		--print("Shooting ".. ShotsToFire)
 		private.AnimationTracks.Shoot:Play()
 		
 		local s:Sound = tool.Handle:FindFirstChildOfClass("Sound"):Clone()
 		s.Parent = tool.Handle
-		s.PlayOnRemove = true
 		s:Play()
+		s.Ended:Once(function()
+			s:Destroy()
+		end)
+		
+		--print(private, Base)
 		
 		--In frame processing
 		for i = 1, ShotsToFire do
