@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
 
 local Filters = require(ReplicatedStorage.SharedWeaponSystem.RayFilter)
 local Camera = workspace.CurrentCamera
@@ -42,8 +43,25 @@ RunService.RenderStepped:Connect(function()
 	end
 
 	-- Convert screen mouse pos to world ray
-	local mousePos2D = UserInputService:GetMouseLocation()
-	local unitRay = Camera:ViewportPointToRay(mousePos2D.X, mousePos2D.Y)
+	-- If there is no mouse then the Mouse Position will be from Vector2.new(.5, .3)
+	local mousePos2D, unitRay = nil, nil
+	
+	if UserInputService.MouseEnabled and not UserInputService.GamepadEnabled then
+		mousePos2D = UserInputService:GetMouseLocation()
+		unitRay = Camera:ViewportPointToRay(mousePos2D.X, mousePos2D.Y)
+	else
+		local offset = nil
+		--Check if first person. Very messy code here
+		--
+		if Player.PlayerScripts.ClientWeaponSystem.GuiValues.FirstPerson.Value == true then
+			offset = Vector2.new(.5, .5)
+		else
+			offset = Vector2.new(.5, .3)
+		end
+		--
+		mousePos2D = Camera.ViewportSize * offset
+		unitRay = Camera:ViewportPointToRay(mousePos2D.X, mousePos2D.Y)
+	end
 
 	-- Raycast into world
 	local result = workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, Params)

@@ -1,4 +1,4 @@
---local Debris = game:GetService("Debris")
+local Debris = game:GetService("Debris")
 
 return function(att:Attachment, tar:Vector3, dur:number)
 	local taratt = Instance.new("Attachment")

@@ -24,11 +24,56 @@ SOFTWARE.
 
 --[[
 --First time set up
-If you wish to set up the source on your own then run this command in the command bar:
+If you wish to set up the source on your own then run the command in the command bar:
 Modify then Copy Paste
-----vv
+]]
+--[[the command
 local x = PATH.TO.MODEL;
-for _, v in pairs(x.Services:GetChildren()) do local Service = v.Name == "StarterPlayerScripts" or v.Name == "StarterCharacterScripts" and game:GetService("StarterPlayer")[v.Name] or game:GetService(v.Name)  for _, vi in ipairs(v:GetChildren()) do vi.Parent = Service end end for i, v in ipairs(x.Scripts:GetChildren()) do v.Value.Enabled = true end
-----^^
+for _, v in pairs(x.Services:GetChildren()) do 
+	local Service = (v.Name == "StarterPlayerScripts" or v.Name == "StarterCharacterScripts") and game:GetService("StarterPlayer")[v.Name] or game:GetService(v.Name)  
+	for _, vi in ipairs(v:GetChildren()) do 
+		vi.Parent = Service 
+	end
+end
+for i, v in ipairs(x.Scripts:GetChildren()) do 
+	v.Value.Enabled = true 
+end
+for i, v in ipairs(x.Data.Tools:GetChildren()) do
+	v.Parent = game:GetService("ReplicatedStorage").SharedWeaponSystem.ToolStorage
+end
+for i, v in ipairs(x.Data.WeaponData:GetChildren()) do
+	v.Parent = game:GetService("ReplicatedStorage").SharedWeaponSystem.WeaponData
+end
 
+x:Destroy()
+]]
+
+--[[ Credits:
+
+@Bartokens for "Projectile+"
+	https://devforum.roblox.com/t/projectile-an-all-in-one-projectile-system-10/3932599
+	https://archive.is/HAN3b
+
+@azavier123 for the "Zone" module
+	https://create.roblox.com/store/asset/72172213626884/Zones
+	https://devforum.roblox.com/t/reliable-zones-using-pure-math-boolean-logic/3763523
+
+Rubie's Weapon Collection by @xXautoboybruhlolXx
+	https://create.roblox.com/store/asset/16856138471/Rubies-Weapon-Collection-Melees
+	https://create.roblox.com/store/asset/16855904941/Rubies-Weapon-Collection-Pistols
+	https://create.roblox.com/store/asset/13280336214/Rubies-Weapon-Collection-Revolvers
+	https://create.roblox.com/store/asset/16856033355/Rubies-Weapon-Collection-Shotguns
+	https://create.roblox.com/store/asset/16856009381/Rubies-Weapon-Collection-Assault-Rifles
+	https://create.roblox.com/store/asset/18175217249/Rubies-Weapon-Collection-Carbines
+	https://create.roblox.com/store/asset/16856056454/Rubies-Weapon-Collection-Light-Machine-Guns
+	https://create.roblox.com/store/asset/16856091776/Rubies-Weapon-Collection-Snipers-Rifles
+	https://create.roblox.com/store/asset/18175229242/Rubies-Weapon-Collection-Machine-Guns
+	https://create.roblox.com/store/asset/16855985616/Rubies-Weapon-Collection-Submachine-Guns
+	https://create.roblox.com/store/asset/16856107796/Rubies-Weapon-Collection-Launchers
+	https://create.roblox.com/store/asset/18175244182/Rubies-Weapon-Collection-DMRs
+	https://create.roblox.com/store/asset/18175221626/Rubies-Weapon-Collection-Battle-Rifles
+	https://create.roblox.com/store/asset/18175203047/Rubies-Weapon-Collection-Machine-Pistols
+	https://create.roblox.com/store/asset/18175233431/Rubies-Weapon-Collection-Heavy-Machine-Guns
+	https://create.roblox.com/store/asset/18175210690/Rubies-Weapon-Collection-PDWs
+	https://create.roblox.com/store/asset/18175262567/Rubies-Weapon-Collection-AntiMateriel-Rifles
 ]]

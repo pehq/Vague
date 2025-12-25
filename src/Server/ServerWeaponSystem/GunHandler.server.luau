@@ -1,13 +1,14 @@
+local ServerScriptService =game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local Debris = game:GetService("Debris")
 
-local SystemFolder = script.Parent
+local SystemFolder = ServerScriptService.ServerWeaponSystem
 local SharedFolder = ReplicatedStorage.SharedWeaponSystem
 
 local Bindables = SystemFolder.Bindables
-local GunConfigs = SystemFolder.WeaponData
+--local GunConfigs = SystemFolder.WeaponData
 local RayConfigs = SystemFolder.Rays
 local PlayerMouseTargets = require(SystemFolder.PlayerMouseTargets) --The 3d mouse positions of every player.
 
@@ -17,19 +18,14 @@ local BoolValidation = require(Utils.TypeValidation.validateNumber)
 local RayFunc = require(RayConfigs.Ray)
 local SphereFunc = require(RayConfigs.Sphere)
 
--- Cache configs for quick access
-local ConfigCache = {}
-for _, module in ipairs(GunConfigs:GetChildren()) do
-	if module:IsA("ModuleScript") then
-		ConfigCache[module.Name] = require(module)
-	end
-end
+local DefaultFiring = require(SystemFolder.FiringStyle.Default)
+local ShotgunFiring = require(SystemFolder.FiringStyle.Shotgun)
 
-local RayCache = {}
-for _, module in ipairs(RayConfigs:GetChildren()) do
-	if module:IsA("ModuleScript") then
-		ConfigCache[module.Name] = require(module)
-	end
+local WeaponCache = require(SharedFolder.Scripts.WeaponDataCache)
+
+local FiringStyles = {}
+for i, v in pairs(SystemFolder.FiringStyle:GetChildren()) do
+	FiringStyles[v.Name] = require(v)
 end
 
 local function debounce(isreloading)
@@ -65,7 +61,7 @@ local function SetupTool(tool:Tool)
 	end
 	
 	local DataName = tool:GetAttribute("WeaponData")
-	local Data = ConfigCache[DataName]
+	local Data = WeaponCache.Get(DataName)
 	
 	--Private
 	PrivateGunsData[tool] = {}
@@ -84,9 +80,10 @@ local function SetupTool(tool:Tool)
 	private.BurstAmmo = Data.FIRETYPE == "Burst" and Data.BURST_SHOTS or nil
 	private.RayFilter = RaycastParams.new()
 	private.RayFilter.FilterType = Enum.RaycastFilterType.Exclude
+	private.Spread = 0
 	
 	private.AnimationTracks = {}
-	
+	private.AudioTracks = {}
 	
 	--For now this does nothing.
 	private.Keys = {
@@ -110,13 +107,15 @@ local function SetupTool(tool:Tool)
 		Config.Parent = tool
 	end
 	
+	tool:SetAttribute("Name", Data.NAME or "Unnamed Gun")
+	tool:SetAttribute("Description", Data.DESCRIPTION or "")
 	tool:SetAttribute("Equipped", false)
 	tool:SetAttribute("Shooting", false)
 	tool:SetAttribute("Reloading", false)
 	tool:SetAttribute("sad", "asd")
 	tool:SetAttribute("Ammo", Data.BULLETS)
 	tool:SetAttribute("MaxAmmo", Data.MAX_BULLETS)
-	
+	tool:SetAttribute("Spread" , private.Spread)
 	--Events
 	local Connections = {}
 	Connections[1] = tool.Equipped:Connect(function()
@@ -125,11 +124,21 @@ local function SetupTool(tool:Tool)
 		
 		tool:SetAttribute("Equipped", true)
 		
+		local Humanoid = tool.Parent:FindFirstChildOfClass("Humanoid")
+		if not Humanoid then
+			return
+		end
+		
 		--Play equip animation
-		local Track = LoadAnimation(tool.Parent:FindFirstChildOfClass("Humanoid"), Data.ANIMATIONS.Idle)
+		local Track = LoadAnimation(Humanoid, Data.ANIMATIONS.Idle)
 		Track.Looped = true
-		table.insert(private.AnimationTracks, Track)
+		private.AnimationTracks["Idle"] = Track
 		Track:Play()
+		
+		local Sound = tool.Handle:FindFirstChildOfClass("Sound")
+		if Sound then
+			private.AudioTracks.Shoot = Sound
+		end
 	end)
 	Connections[2] = tool.Unequipped:Connect(function()
 		CharEquippedGun[Config.Owner.Value] = false
@@ -140,7 +149,6 @@ local function SetupTool(tool:Tool)
 		private.Shooting = false
 		
 		--Stop all anims
-		print(private.AnimationTracks)
 		for i,track in pairs(private.AnimationTracks) do
 			track:Stop()
 			track:Destroy()
@@ -258,33 +266,45 @@ SharedFolder.Remotes.Shoot.OnServerEvent:Connect(function(plr, keydown:boolean)
 	end
 	
 	local private = PrivateGunsData[Tool]
-	local Base = ConfigCache[private.DataName]
+	local Base = WeaponCache.Get(private.DataName)
 	
 	if private.Reloading then
 		return
 	end
 	
 	if keydown then
-		local base = ConfigCache[private.DataName]
+		local base = WeaponCache.Get(private.DataName)
 		if tick() - private.LastTriggered < base.FIRE_COOLDOWN then
 			return
 		end
 		private.LastTriggered = tick()
-		private.LastFired = tick() - (1 / base.FIRERATE)
+		private.LastFired = tick() - 1 / (base.FIRERATE / 60)  
 	end
 	
 	private.Shooting = keydown
 	Tool:SetAttribute("Shooting", keydown)
+	
+	--Load Shoot Animation
 	if keydown then
+		
 		local track = LoadAnimation(Char.Humanoid, Base.ANIMATIONS.Shoot)
 		track.Looped = false
 		private.AnimationTracks["Shoot"] = track
-	elseif private.AnimationTracks["Shoot"] ~= nil then
+		
+		if private.AudioTracks.Shoot.Looped then
+			private.AudioTracks.Shoot:Play()
+		end
+	elseif private.AnimationTracks["Shoot"] ~= nil then --The shoot track exists.
+		
 		local track:AnimationTrack = private.AnimationTracks["Shoot"]
 		track.Looped = false
 		track.Ended:Once(function()
 			track:Stop()
 		end)
+		
+		if private.AudioTracks.Shoot.Looped then
+			private.AudioTracks.Shoot:Stop()
+		end
 	end
 end)
 
@@ -301,7 +321,7 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	end
 	
 	local private = PrivateGunsData[Tool]
-	local Base = ConfigCache[private.DataName]
+	local Base = WeaponCache.Get(private.DataName)
 
 	if not Base.RELOAD or private.Reloading then
 		return
@@ -321,41 +341,44 @@ SharedFolder.Remotes.Reload.OnServerEvent:Connect(function(plr, keydown:boolean)
 	local track = LoadAnimation(char.Humanoid, Base.ANIMATIONS.Reload)
 	track.Looped = false
 	private.AnimationTracks["Reload"] = track
-	track:Play(0, 2,  track.Length / Base.RELOAD_TIME)
+	track:Play(0, 1,  track.Length / Base.RELOAD_TIME)
 	
 	--Stop shooting
-	private.Shooting= false
+	private.Shooting = false
 	local ReloadSuccess = true
 
-	local UnequipCheck = Tool.Unequipped:Once(function()
+	local UnequipCheck:RBXScriptConnection = Tool.Unequipped:Once(function()
 		ReloadSuccess = false
+		private.Reloading = false
 	end)
 
 	task.delay(Base.RELOAD_TIME, function()
 		private.Reloading = false
 		Tool:SetAttribute("Reloading", false)
-
 		if ReloadSuccess then
 			private.Ammo = private.MaxAmmo
+			Tool:SetAttribute("Ammo", private.Ammo)
+		end
+		
+		if UnequipCheck.Connected then
+			UnequipCheck:Disconnect()
 		end
 	end)
 end)
 
-local fpscounter = 0
-local t = tick()
+local fpscounter = 0 --Debug variable
 
 --Everything gets handled through a loop.
 RunService.Heartbeat:Connect(function(dt)
 	for i, tool in ipairs(ActiveGuns) do
-		if not tool:HasTag("PekuGun") 
-			or not tool:HasTag("Configured")
-			or not tool.Parent:FindFirstChildOfClass("Humanoid")
+		local Humanoid = tool.Parent:FindFirstChildOfClass("Humanoid")
+		if not tool:HasTag("PekuGun") or not tool:HasTag("Configured") or not Humanoid
 		then
 			continue
 		end
 		
 		local private = PrivateGunsData[tool]
-		local Base = ConfigCache[private.DataName]
+		local Base = WeaponCache.Get(private.DataName)
 
 		--Check if the gun is in the state of being reloaded.
 		if private.Reloading then
@@ -374,22 +397,32 @@ RunService.Heartbeat:Connect(function(dt)
 		end	
 		
 		--Shoot gun!
-		
 		local TimeSinceShot = tick() - private.LastFired
-		local ShotsToFire = math.floor(TimeSinceShot / (1 / Base.FIRERATE))
+		local ShotsToFire = math.floor(TimeSinceShot / (1 / (Base.FIRERATE / 60))) --1
+		
+		--print(ShotsToFire, private.BurstAmmo)
 		
 		if Base.FIRETYPE == "Semi" then
 			ShotsToFire = 1
-		elseif Base.FIRETYPE == "Burst" then
+		elseif Base.FIRETYPE == "Burst" then --Idk how this works, I asked an ai to help me with this.
 			if private.BurstAmmo <= 0 then
 				private.BurstAmmo = Base.BURST_SHOTS
 				private.Shooting = false
-				print("no shoot")
 				continue
 			end
-			
+
+			-- Clamp shots to available burst ammo
+			ShotsToFire = math.min(ShotsToFire, private.BurstAmmo)
+
+			-- Consume burst ammo
 			private.BurstAmmo -= ShotsToFire
-		end	
+
+			-- End burst if depleted
+			if private.BurstAmmo <= 0 then
+				private.Shooting = false
+				continue
+			end
+		end
 		
 		if ShotsToFire <= 0 then continue end --No shots, skip frame.
 		
@@ -404,50 +437,41 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 		
 		--print("Shooting ".. ShotsToFire)
+		
 		private.AnimationTracks.Shoot:Play()
 		
-		local s:Sound = tool.Handle:FindFirstChildOfClass("Sound"):Clone()
-		s.Parent = tool.Handle
-		s:Play()
-		s.Ended:Once(function()
-			s:Destroy()
-		end)
+		local s:Sound = private.AudioTracks.Shoot
+		if not s.Looped then
+			--Sound is already playing but isn't looped.
+			local c = s:Clone()
+			c.PlayOnRemove = true
+			c.Parent = s.Parent
+			c:Destroy()
+		elseif not (s.Looped and s.Playing) then 
+			--play sound if isn't playing, won't play if sound is looped and is playing.
+			s:Play()
+		end
 		
 		--print(private, Base)
 		
-		--In frame processing
-		for i = 1, ShotsToFire do
-			fpscounter += 1 --Debug variable
-		--	----
-			
-			local alpha = i / ShotsToFire
-			local tar = private.LastMousePos:Lerp(private.MousePos, alpha)
-			private.RayFilter.FilterDescendantsInstances = {tool.Parent} --filter owner's character
-			local start = tool.Handle:FindFirstChildOfClass("Attachment").WorldPosition
-			
-			local rayres, hitpos = nil, nil
-			if Base.RAYCAST_TYPE == "Ray" then
-				rayres, hitpos = RayFunc(start, tar, Base.RANGE, private.RayFilter)
-			elseif Base.RAYCAST_TYPE == "Sphere" then
-				rayres, hitpos = SphereFunc(start, tar, Base.RANGE, private.RayFilter)
-			end
-			
-			if rayres ~= nil then --Something was shot
-				local hit = rayres.Instance
-				local Humanoid = hit.Parent:FindFirstChildOfClass("Humanoid")
-				if hit:IsA("BasePart") and Humanoid then
-					local bodypart = Humanoid:GetLimb(hit)
-					Bindables.Damage:Fire(Humanoid, Base.BODY_DAMAGE[bodypart], private.Owner, hit)
-				end
-			end
-			
-			SharedFolder.Remotes.UnreliableVFX:FireAllClients("Beam", tool.Handle:FindFirstChildOfClass("Attachment"), hitpos, 1/30)
+		--In-frame processing
+		if not Base.GUNTYPE or FiringStyles[Base.GUNTYPE] == nil then
+			FiringStyles["Default"](ShotsToFire, tool, private, private.DataName)
+		else
+			FiringStyles[Base.GUNTYPE](ShotsToFire, tool, private, private.DataName)
 		end
 		
-		private.LastFired += ShotsToFire * (1 / Base.FIRERATE)
+		for i = 1, ShotsToFire do
+			fpscounter += 1 --Debug variable		
+		end
+		
+		private.LastFired += ShotsToFire / (Base.FIRERATE / 60) 
 		private.LastMousePos = private.MousePos
 		
 		if Base.FIRETYPE == "Semi" then
+			private.Shooting = false
+		end
+		if Base.FIRETYPE == "Burst" and private.BurstAmmo == 0 then
 			private.Shooting = false
 		end
 		
@@ -458,6 +482,8 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 ---- FPS counter (debug only) 
+
+local t = tick()
 RunService.Heartbeat:Connect(function()
 	if tick() - t < 1 then return end
 	warn(fpscounter)
