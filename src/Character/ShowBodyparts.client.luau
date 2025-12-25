@@ -12,21 +12,17 @@ local ShownParts = {
 
 local Char = script.Parent
 local Humanoid = Char:FindFirstChildOfClass("Humanoid")
-local CharParts = {}
-for i, v in ipairs(Char:GetChildren()) do
-	if v:IsA("BasePart") == false then
-		continue
-	end
-	
-	if not ShownParts[Humanoid:GetLimb(v)] then
-		continue
-	end
-	
-	table.insert(CharParts, v)
-end
 
 RunService:BindToRenderStep("ShowBody", Enum.RenderPriority.Character.Value - 1, function()
-	for i, v in ipairs(CharParts) do
+	for i, v in ipairs(Char:GetChildren()) do
+		if v:IsA("BasePart") == false then
+			continue
+		end
+		
+		if not ShownParts[Humanoid:GetLimb(v)] then
+			continue
+		end
+		
 		v.LocalTransparencyModifier = 0
 	end
 end)
